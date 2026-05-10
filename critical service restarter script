@@ -1,0 +1,65 @@
+function scan-services {
+param ([string[]]$services
+) 
+if (-not $services) {
+    $services = "Cryptsvc", "wuauserv", "bits", "WinRM"
+}
+$logfile = "$PSScriptRoot\service_log.txt"
+
+$cryptsvclogs = "$PSScriptRoot\Cryptsvc_log.txt"
+# looping through services for efficiency
+foreach ($svc in $services) {
+$service = Get-Service -Name $svc -ErrorAction SilentlyContinue
+# conditional statement in case a service is not found
+if ($null -eq $service) {
+write-host "$svc not found."
+# logging with timestamps to know at what time the run was made
+$timestamp = get-date -format "yyyy-MM-dd HH:mm:ss"
+$LogEntry = "$timestamp | $svc | Not found"
+Add-Content -path $cryptsvclogs -Value "$LogEntry`n"
+continue 
+}
+
+#SPECIAL HANDLING FOR Cryptsvc
+if ($svc -eq "CryptSvc") {
+if ($service.Status -ne "Running") {
+# writing a warning in case CryptSvc is stopped and manual intervention is required
+write-host "WARNING: CryptSvc is stopped. Manual intervention recommended."
+# logging to the special file i made for CryptSvc
+Add-Content -Path $cryptsvclogs -Value "$LogEntry`n"
+# the else statement is if CryptSvc is running
+} else {
+Write-Host "$svc is Running."
+# logging to the file i assigned for CryptSvc
+
+Add-Content -Path $cryptsvclogs -value "$LogEntry`n"
+}
+# continuing the script and stopping the handling for CryptSvc
+
+continue
+
+
+} 
+#Normal services (auto restart)
+if ($service.Status -ne "Running") {
+# error handling in case restart fails (try is to restart the rest of the services)
+try {
+Restart-Service $svc -force
+Write-Output "$svc restarted"
+# logging with timestamp to services_log.txt
+$timestamp = Get-Date -format "yyyy-MM-dd HH:mm:ss"
+$LogEntry = "$timestamp | $svc | $($service.Status) | restarted"
+Add-Content -Path $logfile -value "$LogEntry`n"
+} catch {
+Write-Output "FAILED TO RESTART SERVICE"
+# logging failure to services_log.txt with timestamp
+Add-Content -Path $logfile -value "$LogEntry`n"
+}
+# else statement in case the service is already running and restart isnt needed
+} else { 
+Write-Host "$svc is running"
+# logging to file services_log.txt with timestamp
+Add-Content -Path $logfile -Value "$LogEntry`n"
+}
+}
+}
